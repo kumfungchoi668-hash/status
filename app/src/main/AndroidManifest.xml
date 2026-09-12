@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Normal, non-runtime permissions only. Status Halo does not request
-         location, nearby-device, phone-state, storage, contacts, microphone,
-         camera, SMS, call-log or Internet permissions. -->
+    <!-- Minimal local-only permissions. No Internet, location, phone-state,
+         storage, contacts, microphone, camera, SMS or call-log access. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <application
         android:allowBackup="true"
@@ -25,15 +25,7 @@
 
         <service
             android:name=".StatusOverlayService"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
-        </service>
+            android:exported="false" />
 
         <service
             android:name=".HaloTileService"
