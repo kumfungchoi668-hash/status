@@ -1,16 +1,12 @@
 package com.statushalo.app;
 
-import android.Manifest;
 import android.app.Activity;
-import android.content.ComponentName;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
 import android.graphics.Color;
-import android.os.Build;
+import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
-import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
@@ -23,13 +19,10 @@ import android.widget.Space;
 import android.widget.Switch;
 import android.widget.TextView;
 
-import java.util.ArrayList;
-import java.util.List;
-
 public final class MainActivity extends Activity {
     private SharedPreferences prefs;
     private LinearLayout root;
-    private TextView serviceState;
+    private TextView permissionState;
     private HaloView preview;
     private TextView previewMeta;
 
@@ -40,13 +33,15 @@ public final class MainActivity extends Activity {
         Prefs.ensureDefaults(this);
         prefs = Prefs.get(this);
         buildUi();
-        requestRuntimePermissions();
     }
 
     @Override protected void onResume() {
         super.onResume();
-        refreshServiceState();
+        refreshPermissionState();
         refreshPreview();
+        if (Settings.canDrawOverlays(this)) {
+            startService(new Intent(this, StatusOverlayService.class));
+        }
     }
 
     private void buildUi() {
@@ -61,8 +56,7 @@ public final class MainActivity extends Activity {
         scroll.addView(root, new ScrollView.LayoutParams(-1, -2));
         setContentView(scroll);
 
-        TextView title = text("Status Halo", 30, true, Color.rgb(18,18,18));
-        root.addView(title);
+        root.addView(text("Status Halo", 30, true, Color.rgb(18,18,18)));
         TextView subtitle = text("三星状态栏极简网络 · 信号 · 电量指示器", 14, false, Color.rgb(96,96,96));
         subtitle.setPadding(0, dp(2), 0, dp(16));
         root.addView(subtitle);
@@ -80,16 +74,20 @@ public final class MainActivity extends Activity {
 
         addGap(14);
         LinearLayout permissionCard = card();
-        permissionCard.addView(sectionTitle("运行权限"));
-        serviceState = text("", 14, true, Color.rgb(30,30,30));
-        serviceState.setPadding(0, dp(8), 0, dp(8));
-        permissionCard.addView(serviceState);
-        Button access = button("打开无障碍设置");
-        access.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
-        permissionCard.addView(access);
-        TextView accessNote = text("Status Halo 只使用无障碍服务绘制 TYPE_ACCESSIBILITY_OVERLAY；不读取屏幕内容、不点击、不记录输入。", 12, false, Color.rgb(100,100,100));
-        accessNote.setPadding(0, dp(8), 0, 0);
-        permissionCard.addView(accessNote);
+        permissionCard.addView(sectionTitle("显示权限"));
+        permissionState = text("", 14, true, Color.rgb(30,30,30));
+        permissionState.setPadding(0, dp(8), 0, dp(8));
+        permissionCard.addView(permissionState);
+        Button overlay = button("允许显示在其他应用上层");
+        overlay.setOnClickListener(v -> {
+            Intent i = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:" + getPackageName()));
+            startActivity(i);
+        });
+        permissionCard.addView(overlay);
+        TextView note = text("这一版不再使用无障碍服务。系统只需要“显示在其他应用上层”权限来绘制 Halo；应用不读取屏幕内容、不控制界面。", 12, false, Color.rgb(100,100,100));
+        note.setPadding(0, dp(8), 0, 0);
+        permissionCard.addView(note);
         root.addView(permissionCard);
 
         addGap(14);
@@ -134,51 +132,19 @@ public final class MainActivity extends Activity {
         root.addView(color);
 
         addGap(14);
-        LinearLayout samsung = card();
-        samsung.addView(sectionTitle("三星 One UI 建议"));
-        samsung.addView(text("如果原生 Wi‑Fi / 蜂窝 / 电池图标和 Halo 重叠，建议在 Good Lock → QuickStar → Visibility of indicator icons 里隐藏对应原生图标。这样比用遮罩盖住状态栏稳定。", 13, false, Color.rgb(80,80,80)));
-        TextView line2 = text("Fold / 圆角屏建议：先把尺寸设为 40–48dp，再用“右侧边距”和“顶部微调”对齐。状态栏高度变化时不需要重启。", 13, false, Color.rgb(80,80,80));
-        line2.setPadding(0, dp(10), 0, 0);
-        samsung.addView(line2);
-        root.addView(samsung);
-
-        addGap(14);
         LinearLayout privacy = card();
-        privacy.addView(sectionTitle("隐私与耗电"));
-        privacy.addView(text("没有 INTERNET 权限、没有账号、没有埋点。网络/信号/电池数据只在本机绘制。关闭实时网速时不做 1 秒轮询；熄屏后 Overlay 自动隐藏。", 13, false, Color.rgb(80,80,80)));
+        privacy.addView(sectionTitle("隐私"));
+        privacy.addView(text("无 INTERNET、定位、电话状态、存储、通讯录、麦克风、摄像头、短信和通话记录权限。状态信息只在本机用于绘制。", 13, false, Color.rgb(80,80,80)));
+        TextView limitation = text("注意：因为不再使用无障碍 Overlay，少数全屏应用或特殊系统界面可能覆盖 Halo；三星桌面和大多数普通应用可正常显示。", 13, false, Color.rgb(80,80,80));
+        limitation.setPadding(0, dp(10), 0, 0);
+        privacy.addView(limitation);
         root.addView(privacy);
     }
 
-    private void requestRuntimePermissions() {
-        List<String> needed = new ArrayList<>();
-        if (checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED)
-            needed.add(Manifest.permission.READ_PHONE_STATE);
-        if (Build.VERSION.SDK_INT >= 33) {
-            if (checkSelfPermission(Manifest.permission.NEARBY_WIFI_DEVICES) != PackageManager.PERMISSION_GRANTED)
-                needed.add(Manifest.permission.NEARBY_WIFI_DEVICES);
-        } else if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            needed.add(Manifest.permission.ACCESS_FINE_LOCATION);
-        }
-        if (!needed.isEmpty()) requestPermissions(needed.toArray(new String[0]), 7);
-    }
-
-    private void refreshServiceState() {
-        boolean enabled = isAccessibilityServiceEnabled();
-        serviceState.setText(enabled ? "● 无障碍 Overlay 已启用" : "○ 需要启用 Status Halo 无障碍服务");
-        serviceState.setTextColor(enabled ? Color.rgb(28, 125, 72) : Color.rgb(184, 70, 40));
-    }
-
-    private boolean isAccessibilityServiceEnabled() {
-        ComponentName expected = new ComponentName(this, StatusOverlayService.class);
-        String enabled = Settings.Secure.getString(getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
-        if (enabled == null) return false;
-        TextUtils.SimpleStringSplitter splitter = new TextUtils.SimpleStringSplitter(':');
-        splitter.setString(enabled);
-        while (splitter.hasNext()) {
-            ComponentName cn = ComponentName.unflattenFromString(splitter.next());
-            if (expected.equals(cn)) return true;
-        }
-        return false;
+    private void refreshPermissionState() {
+        boolean granted = Settings.canDrawOverlays(this);
+        permissionState.setText(granted ? "● 悬浮显示权限已启用" : "○ 需要允许显示在其他应用上层");
+        permissionState.setTextColor(granted ? Color.rgb(28, 125, 72) : Color.rgb(184, 70, 40));
     }
 
     private void refreshPreview() {
@@ -200,7 +166,9 @@ public final class MainActivity extends Activity {
                 prefs.getBoolean(Prefs.SHOW_RADIO, false),
                 prefs.getBoolean(Prefs.SHOW_BACKGROUND, false));
         if (previewMeta != null) {
-            previewMeta.setText("" + prefs.getInt(Prefs.SIZE, 44) + "dp · 右 " + prefs.getInt(Prefs.OFFSET_X, 8) + "dp · 顶 " + prefs.getInt(Prefs.OFFSET_Y, 0) + "dp");
+            previewMeta.setText(prefs.getInt(Prefs.SIZE, 44) + "dp · 右 " +
+                    prefs.getInt(Prefs.OFFSET_X, 8) + "dp · 顶 " +
+                    prefs.getInt(Prefs.OFFSET_Y, 0) + "dp");
         }
     }
 
@@ -247,6 +215,9 @@ public final class MainActivity extends Activity {
         sw.setOnCheckedChangeListener((buttonView, isChecked) -> {
             prefs.edit().putBoolean(key, isChecked).apply();
             refreshPreview();
+            if (Settings.canDrawOverlays(this) && StatusOverlayService.instance == null) {
+                startService(new Intent(this, StatusOverlayService.class));
+            }
         });
         parent.addView(sw, new LinearLayout.LayoutParams(-1, -2));
     }
@@ -283,8 +254,8 @@ public final class MainActivity extends Activity {
         parent.addView(seek, new LinearLayout.LayoutParams(-1, -2));
     }
 
-    private void addGap(int dp) {
+    private void addGap(int valueDp) {
         Space s = new Space(this);
-        root.addView(s, new LinearLayout.LayoutParams(1, dp(dp)));
+        root.addView(s, new LinearLayout.LayoutParams(1, dp(valueDp)));
     }
 }
