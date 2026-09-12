@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Status Halo</string>
+    <string name="accessibility_service_name">Status Halo overlay</string>
+    <string name="accessibility_service_desc">Draws the compact Status Halo indicator over the system status bar. It does not read screen content or perform actions on your behalf.</string>
+</resources>
