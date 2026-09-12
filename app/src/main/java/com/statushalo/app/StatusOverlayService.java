@@ -1,6 +1,6 @@
 package com.statushalo.app;
 
-import android.accessibilityservice.AccessibilityService;
+import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -8,11 +8,12 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.graphics.PixelFormat;
 import android.os.Build;
+import android.os.IBinder;
+import android.provider.Settings;
 import android.view.Gravity;
 import android.view.WindowManager;
-import android.view.accessibility.AccessibilityEvent;
 
-public final class StatusOverlayService extends AccessibilityService implements
+public final class StatusOverlayService extends Service implements
         SharedPreferences.OnSharedPreferenceChangeListener, StatusRepository.Listener {
 
     public static volatile StatusOverlayService instance;
@@ -25,12 +26,18 @@ public final class StatusOverlayService extends AccessibilityService implements
     private boolean screenOn = true;
     private int oledNudge = 0;
 
-    @Override public void onServiceConnected() {
-        super.onServiceConnected();
+    @Override public void onCreate() {
+        super.onCreate();
         instance = this;
         Prefs.ensureDefaults(this);
         prefs = Prefs.get(this);
         prefs.registerOnSharedPreferenceChangeListener(this);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            stopSelf();
+            return;
+        }
+
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         createOverlay();
 
@@ -51,11 +58,20 @@ public final class StatusOverlayService extends AccessibilityService implements
         registerReceiver(screenReceiver, f);
     }
 
+    @Override public int onStartCommand(Intent intent, int flags, int startId) {
+        updateVisibility();
+        return START_STICKY;
+    }
+
+    @Override public IBinder onBind(Intent intent) {
+        return null;
+    }
+
     private void createOverlay() {
-        if (halo != null) return;
+        if (halo != null || wm == null) return;
         halo = new HaloView(this);
         lp = new WindowManager.LayoutParams();
-        lp.type = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY;
+        lp.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
         lp.format = PixelFormat.TRANSLUCENT;
         lp.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE |
@@ -84,10 +100,10 @@ public final class StatusOverlayService extends AccessibilityService implements
         int x = prefs.getInt(Prefs.OFFSET_X, 8);
         int y = prefs.getInt(Prefs.OFFSET_Y, 0);
         if (prefs.getBoolean(Prefs.OLED_SHIFT, true)) {
-            // Tiny static nudge changes whenever settings are reapplied. It is deliberately
-            // capped at 1 dp to avoid visible layout drift.
             oledNudge = (int) (System.currentTimeMillis() / 60000L) % 3 - 1;
-        } else oledNudge = 0;
+        } else {
+            oledNudge = 0;
+        }
         lp.x = dp(Math.max(0, x + oledNudge));
         lp.y = dp(y);
         if (halo != null && halo.isAttachedToWindow()) {
@@ -132,9 +148,6 @@ public final class StatusOverlayService extends AccessibilityService implements
     @Override public void onStatus(StatusSnapshot snapshot) {
         if (halo != null) halo.setSnapshot(snapshot);
     }
-
-    @Override public void onAccessibilityEvent(AccessibilityEvent event) { }
-    @Override public void onInterrupt() { }
 
     @Override public void onDestroy() {
         instance = null;
