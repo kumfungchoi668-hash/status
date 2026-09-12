@@ -1,0 +1,6 @@
+Status Halo — clean-room generated project.
+
+Copyright (c) 2026.
+Permission is granted to the recipient to use, modify, build, and redistribute this project.
+This project does not include source code or proprietary assets from O.status.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
