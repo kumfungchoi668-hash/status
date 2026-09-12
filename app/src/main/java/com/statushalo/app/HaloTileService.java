@@ -2,6 +2,7 @@ package com.statushalo.app;
 
 import android.app.PendingIntent;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
 import android.service.quicksettings.Tile;
@@ -19,16 +20,24 @@ public final class HaloTileService extends TileService {
         if (service != null) {
             service.setOverlayEnabled(!service.isOverlayEnabled());
             refresh();
+            return;
+        }
+
+        Intent i;
+        if (Settings.canDrawOverlays(this)) {
+            i = new Intent(this, MainActivity.class);
         } else {
-            Intent i = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            if (Build.VERSION.SDK_INT >= 34) {
-                PendingIntent pi = PendingIntent.getActivity(this, 0, i,
-                        PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-                startActivityAndCollapse(pi);
-            } else {
-                startActivityAndCollapse(i);
-            }
+            i = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:" + getPackageName()));
+        }
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+        if (Build.VERSION.SDK_INT >= 34) {
+            PendingIntent pi = PendingIntent.getActivity(this, 0, i,
+                    PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+            startActivityAndCollapse(pi);
+        } else {
+            startActivityAndCollapse(i);
         }
     }
 
